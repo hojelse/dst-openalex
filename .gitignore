@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local config
+.env
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

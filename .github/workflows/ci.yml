@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: openalex
+          POSTGRES_PASSWORD: openalex
+          POSTGRES_DB: openalex
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U openalex" --health-interval 5s --health-timeout 3s --health-retries 20
+      elasticsearch:
+        image: elasticsearch:9.2.1
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: "false"
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        ports: ["9200:9200"]
+        options: >-
+          --health-cmd "curl -fs http://localhost:9200/_cluster/health" --health-interval 10s --health-timeout 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SNAPSHOT_PATH: ../data/works.jsonl.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: ruff check app tests && ruff format --check app tests
+      - name: Unit tests
+        run: pytest -m "not integration"
+      - name: Load snapshot into Postgres and index into Elasticsearch
+        run: python -m app.cli bootstrap
+      - name: Integration tests (API against real Postgres + Elasticsearch)
+        run: pytest -m integration
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
